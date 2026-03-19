@@ -12,6 +12,9 @@ API_KEY = os.getenv("EIA_API_KEY")
 SERIES_ID = "PET.WCESTUS1.W"
 
 def fetch_eia_data(cache_path="data/eia_cache/crude_inventory.csv"):
+    """
+    Fetching oil data and putting it into dataframe and filtering it to be concise and readable
+    """
     #caching to avoid hitting api every run
     if os.path.exists(cache_path):
         df = pd.read_csv(cache_path, parse_dates=["period"])
