@@ -46,13 +46,13 @@ A sudden geopolitical de-escalation/opening of major trade way or a large invent
 
 ---
 
-## 📊 Charts
+## Charts
 
 ### 1. Inventory vs Seasonal Range
-![Inventory](charts/2026-03-26/inventory_vs_5yr_band.png)
+![Inventory](../charts/2026-03-26/inventory_vs_5yr_band.png)
 
 ### 2. WTI Futures Curve
-![Curve](charts/2026-03-26/futures_curve.png)
+![Curve](../charts/2026-03-26/futures_curve.png)
 
 ### 3. CL1–CL2 Spread (6M Trend)
-![Spread](charts/2026-03-26/spread_timeseries.png)
+![Spread](../charts/2026-03-26/spread_timeseries.png)
