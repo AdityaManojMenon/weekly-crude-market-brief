@@ -11,13 +11,13 @@
 
 ## Market Structure View
 - Inventory: Bearish inventory surprise (build vs seasonal) 
-- Curve: Extreme Backwardation (CL1–CL2: 3.02)
+- Curve: Extreme Backwardation (CL1–CL2: 3.02). Current levels represent the highest backwardation observed in the past 12 months.
 - Combined: BULLISH DIVERGENCE -> Physical tightness overriding inventory builds (Supply of oil barrels increase and paradoxically price of oil also increased.)
 
 ---
 
 ## Key Insight (The "So What?")
-A front-month spread approaching $3.00 signals extreme prompt tightness, consistent with emergency supply conditions in the physical market.
+A front-month spread approaching $3.00 signals extreme prompt tightness, consistent with emergency supply conditions in the physical market. This level of backwardation 99th percentile is historically associated with acute supply dislocations and aggressive physical bidding behavior.
 
 ---
 
