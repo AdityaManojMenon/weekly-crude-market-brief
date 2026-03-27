@@ -3,6 +3,7 @@ from pipeline.eia_ingestion import fetch_eia_data
 from pipeline.surprise_model import compute_inventory_surprise   
 from pipeline.curve_analytics import fetch_curve_data
 from pipeline.generate_insights import generate_insights
+from pipeline.call_tracker import log_new_call
 from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries
 
 def generate_brief():
@@ -10,14 +11,11 @@ def generate_brief():
     # FETCH INVENTORY DATA
     df = fetch_eia_data()
 
-
     # ADD SURPRISE + SIGNAL
     df = compute_inventory_surprise(df)
 
-
     # GET LATEST ROW (inventory_row)
     latest = df.iloc[-1]
-
 
     # FETCH CURVE DATA
     curve_df = fetch_curve_data()
@@ -51,6 +49,13 @@ def generate_brief():
     # GENERATE INSIGHTS
     insights = generate_insights(latest, curve_structure, last_spread)
 
+    entry_price = cl1_price  # front-month price
+    log_new_call(
+        signal=insights["final_signal"],
+        confidence=insights["confidence"],
+        trade=insights["trade_idea"],
+        entry_price=entry_price
+    )
 
     # PRINT (OR WRITE TO FILE)
     print("\n--- FINAL MARKET VIEW ---")

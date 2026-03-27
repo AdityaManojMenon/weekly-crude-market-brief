@@ -52,6 +52,7 @@ weekly-crude-market-brief/
 │
 ├── briefs/                    # Weekly markdown briefs (EIA Thursday publish)
 │   └── YYYY-MM-DD_crude-brief.md
+|   └── template.md
 │
 ├── charts/                    # Auto-generated charts per publication date
 │   └── YYYY-MM-DD/
@@ -63,15 +64,17 @@ weekly-crude-market-brief/
 │   ├── eia_ingestion.py       # EIA API pull + local cache management
 │   ├── surprise_model.py      # Consensus vs actual, magnitude + direction
 │   ├── curve_analytics.py     # M1-M2 spread, backwardation/contango classification
-│   ├── crack_spreads.py       # 3-2-1 crack spread calculation
-│   └── generate_insights.py      # Interpretation logic + markdown output
+│   ├── crack_spreads.py       # 3-2-1 crack spread calculation (going to add)
+│   └── generate_insights.py   # Interpretation logic + markdown output
+|   └── generate_brief.py      # Small summary of everything to help me write the of the brief
 │
 ├── data/
 │   └── eia_cache/             # Cached EIA series (avoids redundant API calls)
 │
 ├── call_tracker.csv           # Running log of every directional call + outcome
-├── requirements.txt
-└── .github/workflows/         # Automated Thursday publish workflow
+├── .env.                      # EIA API KEY
+├── README.md
+└── requirements.txt
 ```
 
 ---
@@ -85,7 +88,7 @@ weekly-crude-market-brief/
 | EIA Open Data API | `PET.WCRRIUS2.W` — crude imports | Supply-side context |
 | EIA Open Data API | `PET.WCRPUS2.W` — crude production | Domestic supply trend |
 | EIA Open Data API | `PET.WPULEUS2.W` — refinery utilization | Demand-side pull |
-| CME / broker feed | NYMEX WTI front-month settlements | Curve structure |
+| Yahoo Finance     | NYMEX WTI front-month settlements | Curve structure |
 | Reuters poll / manual | Analyst consensus estimates | Surprise calculation |
 
 All EIA data is free and available via [api.eia.gov](https://api.eia.gov). API key required (free registration).
@@ -115,6 +118,18 @@ date, call, conviction, wti_price_at_publish, 1wk_return, correct
 ```
 
 The tracker is the accountability layer. A directional research product without outcome tracking is not a research product.
+
+---
+
+## Trade Logic
+
+Signals are generated using a hierarchy:
+
+1. Curve structure (primary signal — forward expectations)
+2. Inventory surprise (secondary — backward-looking)
+3. Divergence detection (highest priority)
+
+In divergence regimes, curve structure is treated as dominant, reflecting physical market conditions over headline data.
 
 ---
 
