@@ -17,7 +17,7 @@ def log_new_call(signal, confidence, trade, entry_price):
         "entry_price": entry_price,
         "next_week_price": None,
         "return_pct": None,
-        "correct": None
+        "correct": None 
     }
 
     if os.path.exists(TRACKER_FILE):
@@ -36,7 +36,6 @@ def update_last_call():
         return
 
     df = pd.read_csv(TRACKER_FILE)
-
     if df.empty:
         return
 
@@ -44,31 +43,63 @@ def update_last_call():
 
     # skip if already updated
     if pd.notna(df.loc[last_idx, "next_week_price"]):
+        print("Last call already updated.")
         return
 
-    # get current WTI price
-    wti = yf.download("CL=F", period="1d")
-    current_price = float(wti["Close"].iloc[-1])
+    call_date = pd.to_datetime(df.loc[last_idx, "date"])
+    today = pd.Timestamp.today()
 
-    entry_price = df.loc[last_idx, "entry_price"]
+    if (today - call_date).days < 5:
+        print("Too early to evaluate call.")
+        return
 
-    # calculate return
-    ret = (current_price - entry_price) / entry_price * 100
+    # Fetch price
+    try:
+        wti = yf.Ticker("CL=F")
+        hist = wti.history(period="1d")
 
-    signal = df.loc[last_idx, "signal"]
+        if hist.empty:
+            print("No price data available.")
+            return
 
-    # determine correctness
-    if signal in ["BULLISH", "STRONG BULLISH"]:
-        correct = "yes" if ret > 0 else "no"
-    elif signal in ["BEARISH", "STRONG BEARISH"]:
-        correct = "yes" if ret < 0 else "no"
+        current_price = float(hist["Close"].iloc[-1])
+
+    except Exception as e:
+        print(f"Error fetching price: {e}")
+        return
+
+    entry_price = float(df.loc[last_idx, "entry_price"])
+
+
+    # Compute return
+    ret_pct = ((current_price - entry_price) / entry_price) * 100
+    signal = str(df.loc[last_idx, "signal"]).upper()
+
+    # Correctness logic
+    if "BULLISH" in signal:
+        correct = 1 if ret_pct > 0 else 0
+    elif "BEARISH" in signal:
+        correct = 1 if ret_pct < 0 else 0
     else:
-        correct = "neutral"
+        correct = None
 
-    df.loc[last_idx, "next_week_price"] = current_price
-    df.loc[last_idx, "return_pct"] = round(ret, 2)
-    df.loc[last_idx, "correct"] = correct
+    # Save results
+    df.at[last_idx, "next_week_price"] = round(current_price, 2)
+    df.at[last_idx, "return_pct"] = round(ret_pct, 2)
+    df.at[last_idx, "correct"] = correct
+
+    # enforce numeric
+    df["entry_price"] = pd.to_numeric(df["entry_price"], errors="coerce")
+    df["next_week_price"] = pd.to_numeric(df["next_week_price"], errors="coerce")
+    df["return_pct"] = pd.to_numeric(df["return_pct"], errors="coerce")
+    df["correct"] = pd.to_numeric(df["correct"], errors="coerce")
 
     df.to_csv(TRACKER_FILE, index=False)
 
-    print("Updated last call")
+    print(f"Updated last call → Return: {ret_pct:.2f}% | Correct: {correct}")
+
+def main():
+    update_last_call()
+
+if __name__ == "__main__":
+    main()

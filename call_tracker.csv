@@ -1,1 +1,4 @@
-date,WTI_call,signal_basis,WTI_publish_price,WTI_next_week,outcome
+date,signal,confidence,trade,entry_price,next_week_price,return_pct,correct
+2026-03-27,BULLISH,Very High,Long WTI and long roll (CL1–CL2) — capture extreme backwardation carry,93.62999725341795,,,
+2026-03-27,BULLISH,Very High,Long WTI and long roll (CL1–CL2) — capture extreme backwardation carry,94.0999984741211,,,
+2026-03-27,BULLISH,Very High,Long WTI and long roll (CL1–CL2) — capture extreme backwardation carry,93.9800033569336,,,

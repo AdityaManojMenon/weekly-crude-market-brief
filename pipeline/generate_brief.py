@@ -4,6 +4,7 @@ from pipeline.surprise_model import compute_inventory_surprise
 from pipeline.curve_analytics import fetch_curve_data
 from pipeline.generate_insights import generate_insights
 from pipeline.call_tracker import log_new_call
+from pipeline.call_tracker import update_last_call
 from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries
 
 def generate_brief():
@@ -49,6 +50,7 @@ def generate_brief():
     # GENERATE INSIGHTS
     insights = generate_insights(latest, curve_structure, last_spread)
 
+    update_last_call()
     entry_price = cl1_price  # front-month price
     log_new_call(
         signal=insights["final_signal"],
