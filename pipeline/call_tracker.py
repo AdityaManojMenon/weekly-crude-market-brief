@@ -5,6 +5,9 @@ import os
 
 TRACKER_FILE = "call_tracker.csv"
 
+SLIPPAGE_BPS = 5 # 0.05%
+TRANSACTION_COST_BPS = 2 # 0.02%
+
 
 def log_new_call(signal, confidence, trade, entry_price):
     date_str = datetime.today().strftime("%Y-%m-%d")
@@ -39,7 +42,11 @@ def update_last_call():
     if df.empty:
         return
 
-    last_idx = df.index[-1]
+    if len(df) < 2:
+        print("No previous call to evaluate.")
+        return
+
+    last_idx = df.index[-2]
 
     # skip if already updated
     if pd.notna(df.loc[last_idx, "next_week_price"]):
@@ -72,7 +79,15 @@ def update_last_call():
 
 
     # Compute return
-    ret_pct = ((current_price - entry_price) / entry_price) * 100
+    gross_return = (current_price - entry_price) / entry_price
+
+    # convert bps → %
+    slippage = SLIPPAGE_BPS / 10000
+    transaction_cost = TRANSACTION_COST_BPS / 10000
+
+    net_return = gross_return - slippage - transaction_cost
+
+    ret_pct = net_return * 100
     signal = str(df.loc[last_idx, "signal"]).upper()
 
     # Correctness logic
@@ -82,13 +97,16 @@ def update_last_call():
         correct = 1 if ret_pct < 0 else 0
     else:
         correct = None
+    
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").reset_index(drop=True)
 
     # Save results
     df.at[last_idx, "next_week_price"] = round(current_price, 2)
+    df.at[last_idx, "gross_return_pct"] = round(gross_return * 100, 2)
     df.at[last_idx, "return_pct"] = round(ret_pct, 2)
     df.at[last_idx, "correct"] = correct
 
-    # enforce numeric
     df["entry_price"] = pd.to_numeric(df["entry_price"], errors="coerce")
     df["next_week_price"] = pd.to_numeric(df["next_week_price"], errors="coerce")
     df["return_pct"] = pd.to_numeric(df["return_pct"], errors="coerce")
