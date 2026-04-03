@@ -101,3 +101,19 @@ def plot_spread_timeseries(curve_df):
     plt.savefig(path, dpi=300)
     plt.close()
     return path
+
+def plot_crack_spread(df):
+    date_str = datetime.today().strftime("%Y-%m-%d")
+    folder = f"charts/{date_str}"
+    os.makedirs(folder, exist_ok=True)
+
+    plt.figure(figsize=(10,5))
+    plt.plot(df.index, df["crack_spread"])
+    plt.title("3-2-1 Crack Spread (Refinery Margin)")
+    plt.ylabel("$/barrel")
+    plt.xlabel("Date")
+
+    path = f"{folder}/crack_spread.png"
+    plt.savefig(path, dpi=300)
+    plt.close()
+    return path

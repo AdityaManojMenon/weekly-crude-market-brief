@@ -1,9 +1,7 @@
 import requests
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
-from datetime import datetime
 
 load_dotenv()
 

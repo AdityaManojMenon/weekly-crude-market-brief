@@ -5,6 +5,8 @@ from pipeline.curve_analytics import fetch_curve_data
 from pipeline.generate_insights import generate_insights
 from pipeline.call_tracker import log_new_call
 from pipeline.call_tracker import update_last_call
+from pipeline.crack_spreads import fetch_crack_spread
+from charts.generate_charts import plot_crack_spread
 from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries
 
 def generate_brief():
@@ -46,9 +48,14 @@ def generate_brief():
 
     curve_chart = plot_futures_curve_snapshot(cl1_price, cl2_price)
     spread_chart = plot_spread_timeseries(curve_df)
+
+    crack_df = fetch_crack_spread()
+    crack_chart = plot_crack_spread(crack_df)
+
+    latest_crack = crack_df["crack_spread"].iloc[-1]
         
     # GENERATE INSIGHTS
-    insights = generate_insights(latest, curve_structure, last_spread)
+    insights = generate_insights(latest, curve_structure, last_spread, latest_crack)
 
     update_last_call()
     entry_price = cl1_price  # front-month price
@@ -59,7 +66,6 @@ def generate_brief():
         entry_price=entry_price
     )
 
-    # PRINT (OR WRITE TO FILE)
     print("\n--- FINAL MARKET VIEW ---")
     print(insights)
 
@@ -67,6 +73,7 @@ def generate_brief():
     print(inventory_chart)
     print(curve_chart)
     print(spread_chart)
+    print(crack_chart)
 
 def main():
     generate_brief()
