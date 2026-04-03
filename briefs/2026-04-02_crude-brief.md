@@ -62,10 +62,10 @@ Emergency supply releases or coordinated production increases could rapidly reba
 ---
 
 ## Market Drivers (Macro / Geopolitical)
--Strait of Hormuz Disruption: Severe disruption to a key global oil chokepoint (~20% of supply flows) has significantly constrained physical shipments, driving acute prompt scarcity.
--US vs Iran Escalation: Rising military tensions and lack of de-escalation signals have increased the geopolitical risk premium, with markets pricing in prolonged supply disruption.
--OPEC Supply Disruptions: War-related production and export constraints have reduced available supply, reinforcing structural tightness in the market (Iran drone attack on Kuwait tankers)
-Refinery Demand + SPR Refill: Strong Asian refinery demand and U.S. SPR restocking are increasing competition for physical barrels, further tightening prompt supply.
+- Strait of Hormuz Disruption: Severe disruption to a key global oil chokepoint (~20% of supply flows) has significantly constrained physical shipments, driving acute prompt scarcity.
+- US vs Iran Escalation: Rising military tensions and lack of de-escalation signals have increased the geopolitical risk premium, with markets pricing in prolonged supply disruption.
+- OPEC Supply Disruptions: War-related production and export constraints have reduced available supply, reinforcing structural tightness in the market (Iran drone attack on Kuwait tankers)
+- Refinery Demand + SPR Refill: Strong Asian refinery demand and U.S. SPR restocking are increasing competition for physical barrels, further tightening prompt supply.
 
 ---
 
