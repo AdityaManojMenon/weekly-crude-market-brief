@@ -47,7 +47,6 @@ Even in a flat price environment, the position can generate returns through curv
 The carry acts as a downside buffer, offsetting moderate adverse price moves
 The trade becomes structurally attractive due to market dislocation, not just price direction
 
-In essence, the market is offering exceptional compensation for holding prompt exposure, indicating severe stress in the physical supply chain.
 ---
 
 ## Risk / Failure Scenario
