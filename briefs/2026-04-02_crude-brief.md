@@ -70,12 +70,12 @@ Emergency supply releases or coordinated production increases could rapidly reba
 ---
 
 ## Performance (Strategy Tracking)
-Last Week Return: +19.17%
-Strategy Status: Correct Call (Bullish)
-Portfolio Value: $11,917 (from $10,000 which is 10% of total portfolio)
-Strong performance driven by:
-Correct identification of backwardation regime and rolling yield expansion
-Failure to de-escalate situations in Middle East and continued war with Iran
+- Last Week Return: +19.17%
+- Strategy Status: Correct Call (Bullish)
+- Portfolio Value: $11,917 (from $10,000 which is 10% of total portfolio)
+- Strong performance driven by:
+    - Correct identification of backwardation regime and rolling yield expansion
+    - Failure to de-escalate situations in Middle East and continued war with Iran
 
 ## Charts
 
