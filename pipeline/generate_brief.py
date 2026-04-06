@@ -6,8 +6,7 @@ from pipeline.generate_insights import generate_insights
 from pipeline.call_tracker import log_new_call
 from pipeline.call_tracker import update_last_call
 from pipeline.crack_spreads import fetch_crack_spread
-from charts.generate_charts import plot_crack_spread
-from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries
+from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries, plot_crack_spread
 
 def generate_brief():
 
