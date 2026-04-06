@@ -1,0 +1,6 @@
+crude_venv/
+venv/
+.venv/
+crude_venv/
+__pycache__/
+*.pyccrude_venv/
