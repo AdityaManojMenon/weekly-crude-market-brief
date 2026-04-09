@@ -7,8 +7,11 @@ from pipeline.call_tracker import log_new_call
 from pipeline.call_tracker import update_last_call
 from pipeline.crack_spreads import fetch_crack_spread
 from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries, plot_crack_spread
+from pipeline.regime_model import detect_regime_with_momentum
 
 def generate_brief():
+
+    event_override = "CEASEFIRE"
 
     # FETCH INVENTORY DATA
     df = fetch_eia_data()
@@ -21,8 +24,12 @@ def generate_brief():
 
     # FETCH CURVE DATA
     curve_df = fetch_curve_data()
-    if curve_df is not None and not curve_df.empty:
-        last_spread = curve_df["spread"].iloc[-1]
+    
+    if curve_df is None:
+        raise ValueError("Curve data unavailable — cannot proceed")
+    
+    last_spread = curve_df["spread"].iloc[-1]
+    regime, spread_change, caution_flag, reversal_flag = detect_regime_with_momentum(curve_df)
 
     # classification logic
     if last_spread > 2:
@@ -38,7 +45,7 @@ def generate_brief():
     else:
         curve_structure = "Mild Contango"
 
-
+    # CHARTS
     inventory_chart = plot_inventory_vs_seasonal(df)
 
     latest_curve = curve_df.iloc[-1]
@@ -48,16 +55,32 @@ def generate_brief():
     curve_chart = plot_futures_curve_snapshot(cl1_price, cl2_price)
     spread_chart = plot_spread_timeseries(curve_df)
 
+    # CRACK SPREAD
     crack_df = fetch_crack_spread()
+
+    if crack_df is None or crack_df.empty:
+        raise ValueError("Crack spread data unavailable")
+
     crack_chart = plot_crack_spread(crack_df)
-
     latest_crack = crack_df["crack_spread"].iloc[-1]
-        
-    # GENERATE INSIGHTS
-    insights = generate_insights(latest, curve_structure, last_spread, latest_crack)
 
+    # INSIGHTS
+    insights = generate_insights(
+        latest,
+        curve_structure,
+        last_spread,
+        latest_crack,
+        regime,
+        spread_change, 
+        caution_flag, 
+        reversal_flag,
+        event_override 
+    )
+
+    # UPDATE OLD TRADE → THEN LOG NEW
     update_last_call()
-    entry_price = cl1_price  # front-month price
+
+    entry_price = cl1_price
     log_new_call(
         signal=insights["final_signal"],
         confidence=insights["confidence"],
@@ -65,8 +88,11 @@ def generate_brief():
         entry_price=entry_price
     )
 
+    # OUTPUT
     print("\n--- FINAL MARKET VIEW ---")
     print(insights)
+
+    print(f"\nRegime: {regime} | Spread Change: {spread_change:.2f}")
 
     print("\nCharts saved:")
     print(inventory_chart)
@@ -75,7 +101,7 @@ def generate_brief():
     print(crack_chart)
 
 def main():
-    generate_brief()
+    generate_brief()    
 
 if __name__ == "__main__":
     main()

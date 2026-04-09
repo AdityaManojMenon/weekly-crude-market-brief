@@ -1,3 +1,4 @@
 date,signal,confidence,trade,entry_price,next_week_price,return_pct,correct,gross_return_pct
 2026-03-27,BULLISH,Very High,Long WTI and long roll (CL1–CL2) — capture extreme backwardation carry,93.9800033569336,112.06,19.17,1.0,19.24
-2026-04-02,BULLISH,Very High,Long WTI and long roll (CL1–CL2) — capture extreme backwardation carry,112.05999755859376,,,,
+2026-04-02,BULLISH,Very High,Long WTI and long roll (CL1–CL2) — capture extreme backwardation carry,112.05999755859376,96.99,-13.52,0.0,-13.45
+2026-04-09,BEARISH,High,Reduce or fade prompt bullish exposure. Geopolitical de-escalation can rapidly compress backwardation and remove crisis premium.,97.5,,,,
