@@ -1,4 +1,5 @@
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import os
 import pandas as pd
 from datetime import datetime
@@ -56,7 +57,7 @@ def _add_callout(
     color: str = BBG_AMBER,
 ) -> None:
     """
-    Elite analyst callout box with arrow pointing to an inflection point.
+    Analyst callout box with arrow pointing to an inflection point.
     ax/ay = pixel offset of the label box from the data point.
     """
     fig.add_annotation(
@@ -436,3 +437,100 @@ def plot_crack_spread(df):
     _add_footer(fig, include_timestamp=False)
 
     return _save(fig, "crack_spread.png")
+
+# ─────────────────────────────────────────────
+#  5.  PnL CURVE  +  DRAWDOWN (2-panel)
+# ─────────────────────────────────────────────
+def plot_pnl_drawdown(df: pd.DataFrame, win_rate: float, sharpe: float | None, max_dd: float) -> str:
+    """
+    df       : output of compute_cumulative_returns() — must have 'date',
+               'wealth_growth', 'drawdown', and optionally 'return_pct' columns
+    win_rate : % e.g. 62.5
+    sharpe   : annualised Sharpe ratio (or None if insufficient data)
+    max_dd   : drawdown as a decimal e.g. -0.12 (will be displayed as -12.00%)
+    """
+    df = df.copy()
+    starting_capital = df["wealth_growth"].iloc[0]
+    final_value      = df["wealth_growth"].iloc[-1]
+    total_return_pct = (final_value / starting_capital - 1) * 100
+    sharpe_str       = f"{sharpe:.2f}" if sharpe is not None else "N/A"
+
+    fig = make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        row_heights=[0.7, 0.3],
+    )
+
+    fig.add_hline(
+        y=starting_capital,
+        line=dict(color=BBG_BORDER, width=1, dash="dot"),
+        row=1, col=1,
+    )
+
+    fig.add_trace(go.Scatter(
+        x=df["date"], y=df["wealth_growth"],
+        mode="lines",
+        line=dict(color=BBG_BLUE, width=2.5),
+        name="Equity Curve",
+        hovertemplate="<b>%{x|%b %d}</b><br>$%{y:,.2f}<extra></extra>",
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=df["date"], y=df["drawdown"],
+        mode="lines", fill="tozeroy",
+        fillcolor="rgba(255,59,59,0.18)",
+        line=dict(color=BBG_RED, width=1.5),
+        name="Drawdown",
+        hovertemplate="<b>%{x|%b %d}</b><br>DD: %{y:.2%}<extra></extra>",
+    ), row=2, col=1)
+
+    axis_common = dict(
+        tickfont=dict(size=10, color=BBG_SUBTEXT, family=FONT_FAMILY),
+        gridcolor=BBG_GRID,
+        linecolor=BBG_BORDER,
+        zerolinecolor=BBG_BORDER,
+        showgrid=True,
+    )
+
+    stats_text = (
+        f"Return: {'+' if total_return_pct >= 0 else ''}{total_return_pct:.2f}%   "
+        f"Win Rate: {win_rate:.1f}%   "
+        f"Sharpe: {sharpe_str}   "
+        f"Max DD: {max_dd * 100:.2f}%"
+    )
+
+    fig.update_layout(
+        title=dict(
+            text=f"WTI STRATEGY  ·  Portfolio Performance & Risk<br>"
+                 f"<span style='font-size:10px;color:#f5c542'>{stats_text}</span>",
+            font=dict(family=FONT_FAMILY, size=16, color=BBG_ORANGE),
+            x=0.01, xanchor="left",
+        ),
+        paper_bgcolor=BBG_BG,
+        plot_bgcolor=BBG_PANEL,
+        font=dict(family=FONT_FAMILY, color=BBG_TEXT),
+        height=700,
+        hovermode="x unified",
+        legend=dict(
+            bgcolor="rgba(20,20,20,0.85)",
+            bordercolor=BBG_BORDER, borderwidth=1,
+            font=dict(size=10, color=BBG_TEXT),
+            orientation="h",
+            yanchor="bottom", y=1.02,
+            xanchor="right", x=0.99,   # ✅ move to right
+        ),
+        margin=dict(l=65, r=40, t=110, b=55),
+        xaxis=dict(**axis_common),
+        xaxis2=dict(**axis_common, title=dict(text="Trade Date", font=dict(size=11, color=BBG_SUBTEXT))),
+        yaxis=dict(**axis_common,
+                   title=dict(text="Account Value (USD)", font=dict(size=11, color=BBG_SUBTEXT)),
+                   tickprefix="$", tickformat=",.0f"),
+        yaxis2=dict(**axis_common,
+                    title=dict(text="Drawdown (%)", font=dict(size=11, color=BBG_SUBTEXT)),
+                    ticksuffix="%"),
+    )
+
+    _add_footer(fig, include_timestamp=True)
+
+    return _save(fig, "pnl_curve.png")

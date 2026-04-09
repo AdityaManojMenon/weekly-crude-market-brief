@@ -6,12 +6,14 @@ from pipeline.generate_insights import generate_insights
 from pipeline.call_tracker import log_new_call
 from pipeline.call_tracker import update_last_call
 from pipeline.crack_spreads import fetch_crack_spread
-from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries, plot_crack_spread
 from pipeline.regime_model import detect_regime_with_momentum
+from pipeline.performance import load_data, compute_win_rate, compute_sharpe, compute_cumulative_returns, compute_cagr, compute_drawdown
+from charts.generate_charts import plot_inventory_vs_seasonal, plot_futures_curve_snapshot, plot_spread_timeseries, plot_crack_spread,plot_pnl_drawdown
+
 
 def generate_brief():
 
-    event_override = "CEASEFIRE"
+    event_override = "CEASEFIRE" # As of April 8 usually it is None with exception of exterme events and uncertainity
 
     # FETCH INVENTORY DATA
     df = fetch_eia_data()
@@ -88,6 +90,21 @@ def generate_brief():
         entry_price=entry_price
     )
 
+    # Performance
+    try:
+        performance_df = load_data()
+        win_rate = compute_win_rate(performance_df)
+        performance_df = compute_cumulative_returns(performance_df)
+        performance_df, max_dd = compute_drawdown(performance_df)
+        sharpe = compute_sharpe(performance_df)
+        cagr = compute_cagr(performance_df)
+
+        pnl_chart = plot_pnl_drawdown(performance_df, win_rate, sharpe, max_dd)
+    except Exception as e:
+        print(f"Performance charts skipped: {e}")
+        pnl_chart = None
+
+
     # OUTPUT
     print("\n--- FINAL MARKET VIEW ---")
     print(insights)
@@ -99,6 +116,8 @@ def generate_brief():
     print(curve_chart)
     print(spread_chart)
     print(crack_chart)
+    if pnl_chart:
+        print(pnl_chart)
 
 def main():
     generate_brief()    

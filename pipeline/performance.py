@@ -12,8 +12,8 @@ def load_data():
     return df
 
 def compute_win_rate(df):
-    win = df["correct"]
-    win_rate = win.mean() * 100
+    win = df["correct"].dropna()
+    win_rate = win.mean() * 100 if len(win) > 0 else 0
     print(f"Win Rate: {win_rate:.2f}%")
     return win_rate
 
@@ -46,7 +46,7 @@ def compute_cumulative_returns(df):
 
 # SHARPE RATIO
 def compute_sharpe(df):
-    returns = df["return_pct"] / 100
+    returns = df["return_pct"].dropna() / 100
     if len(returns) < 2:
         print("Not enough data for Sharpe")
         return None
@@ -55,42 +55,40 @@ def compute_sharpe(df):
     print(f"Sharpe Ratio: {sharpe_annualized:.2f}")
     return sharpe_annualized
 
+def compute_drawdown(df):
+    df = df.copy()
+    df["peak"] = df["wealth_growth"].cummax()
+    df["drawdown"] = (df["wealth_growth"] - df["peak"]) / df["peak"]
 
-# PLOT PnL CURVE
-def plot_pnl(df):
-    date_str = datetime.today().strftime("%Y-%m-%d")
-    folder = f"charts/{date_str}"
+    max_dd = df["drawdown"].min()
+    print(f"Max Drawdown: {max_dd * 100:.2f}%")
 
-    os.makedirs(folder, exist_ok=True)
+    return df, max_dd
 
-    file_path = f"{folder}/pnl_curve.png"
+def compute_cagr(df):
+    start = df["date"].iloc[0]
+    end = df["date"].iloc[-1]
 
-    #Start plotting
-    plt.style.use('ggplot')
-    plt.figure(figsize=(12, 6))
+    years = (end - start).days / 365
+    final = df["wealth_growth"].iloc[-1]
+    initial = df["wealth_growth"].iloc[0]
 
-    plt.plot(df["date"], df["wealth_growth"], marker='o')
-    plt.scatter(df["date"], df["wealth_growth"], color='red')
-    plt.axhline(y=10000, color='black', linestyle='--', alpha=0.5)
-
-    plt.title("Portfolio Growth: $10,000 Starting Capital (WTI Strategy)")
-    plt.ylabel("Account Balance ($)")
-    plt.xlabel("Trade Date")
-    plt.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig(file_path)
-    print(f"Saved → {file_path}")
+    if years > 0:
+        cagr = (final / initial) ** (1 / years) - 1
+        print(f"CAGR: {cagr * 100:.2f}%")
 
 def main():
     df = load_data()
 
     wr = compute_win_rate(df)
+    cr = compute_cagr(df)
     df_results = compute_cumulative_returns(df)
     sr = compute_sharpe(df_results)
-    
-    plot_pnl(df_results)
+    df_results, max_dd = compute_drawdown(df_results)
+
+
     print(f"Final Account Value: ${df_results['wealth_growth'].iloc[-1]:.2f}")
+    print(f"Total Trades: {len(df)}")
 
 if __name__ == "__main__":
     main()

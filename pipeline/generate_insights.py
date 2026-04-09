@@ -7,7 +7,7 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     divergence = False
 
-    # INVENTORY VIEW
+    #INVENTORY VIEW
     if inv_signal == "bullish":
         inv_view = "Bullish inventory surprise (draw vs seasonal)"
     elif inv_signal == "bearish":
@@ -17,11 +17,11 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     insights["inventory_view"] = inv_view
 
-    # CURVE VIEW 
+    #CURVE VIEW 
     curve_view = f"{curve_structure} (CL1–CL2: {curve_spread:.2f})"
     insights["curve_view"] = curve_view
 
-    # CRACK SPREAD VIEW
+    #CRACK SPREAD VIEW
     if crack_spread > 25:
         crack_view = f"Strong refinery margins (Crack: {crack_spread:.2f}) — strong demand"
         demand_signal = "bullish"
@@ -83,7 +83,7 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
     insights["combined_view"] = combined
     insights["final_signal"] = final_signal
 
-    # Regime View  
+    #Regime View  
     insights["regime"] = regime
 
     if regime == "CRISIS_TIGHTNESS":
@@ -104,7 +104,7 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
     else:
         insights["regime_view"] = "Balanced market"
 
-    # CONFIDENCE SCORE 
+    #CONFIDENCE SCORE 
     confidence = 0
 
     # Inventory strength
@@ -137,18 +137,21 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
         confidence += 1
 
     # Regime adjustments
-    if regime == "EXTREME_DISLOCATION":
+    if regime in ["WEAKENING_TIGHTNESS", "CRISIS_UNWIND"]:
+        confidence -= 1 
+    elif regime == "EXTREME_DISLOCATION":
         confidence -= 2
-    elif regime == "WEAKENING_TIGHTNESS":
-        confidence -= 1
-    elif regime == "CRISIS_UNWIND":
-        confidence += 1
+    
 
     # Momentum adjustment
     if spread_change < -2:
         confidence -= 1
+    if abs(spread_change) > 3:
+        confidence -= 1
 
     # Event adjustment
+    if event_override is not None:
+        confidence -= 1 #macro uncertainty 
     if event_override in {"CEASEFIRE", "DE_ESCALATION"}:
         confidence -= 2
     elif event_override in {"SUPPLY_SHOCK", "ESCALATION"}:
@@ -218,9 +221,8 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     insights["trade_idea"] = trade
 
-    # -------------------------
+    
     # NARRATIVE (REGIME-AWARE)
-    # -------------------------
     if event_override in {"CEASEFIRE", "DE_ESCALATION"}:
         insights["narrative"] = (
             "EVENT-DRIVEN NORMALIZATION: Geopolitical de-escalation is likely compressing prompt risk premium. "
@@ -253,9 +255,8 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     else:
         insights["narrative"] = "Market signals broadly aligned with fundamentals."
-    # -------------------------
+
     # METRICS OUTPUT
-    # -------------------------
     insights["inventory_level"] = inventory_row["value_million_bbl"]
     insights["weekly_change"] = inventory_row["weekly_change"]
     insights["seasonal_avg"] = inventory_row["seasonal_avg"]
