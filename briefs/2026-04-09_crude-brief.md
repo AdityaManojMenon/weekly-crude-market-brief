@@ -194,5 +194,5 @@ This is no longer a **trend market** — it is a **transition market**
 ---
 
 ## Final Report 
-![Report](../reports/2026-04-09.pdf)
+[Download Final Report (PDF)](../reports/2026-04-09.pdf)
 
