@@ -1,70 +1,143 @@
-# Weekly Crude Oil Market Brief — {DATE}
-
-## Key Metrics
-- Inventory Level: X mb
-- Weekly Change: X mb
-- Seasonal Avg: X mb
-- Inventory Surprise: X mb → **SIGNAL**
-- CL1–CL2 Spread: X → **Curve Structure**
+# WTI Crude Oil Market Brief — {DATE}  
+## {REGIME TAGLINE} (e.g., Crisis Tightness → Normalization)
 
 ---
 
-## Market Structure View
-- Inventory: {inventory_view}
-- Curve: {curve_view}
-- Combined: {combined_view}
+## Executive Summary
+
+{2–4 bullet points max}
+
+- Spread move
+- Key event (EIA / geopolitics)
+- What changed
+- One-line takeaway
+
+**Key Shift:**  
+{1 strong sentence — e.g., "Momentum now dominates level"}
 
 ---
 
-## Key Insight (The "So What?")
-{WRITE THIS MANUALLY}
+## Key Metrics (Snapshot)
 
-Example:
-A front-month spread approaching $3.00 signals extreme prompt tightness, consistent with emergency supply conditions in the physical market.
-
----
-
-## Trade Idea
-{trade_idea}
-
-### Trade Rationale
-{WRITE THIS MANUALLY}
-
-Example:
-Despite bearish inventory builds, the steep backwardation reflects strong prompt demand and supply constraints, favoring long front-month positioning.
+- Inventory: {X mb} (vs seasonal: {X})  
+- Inventory Surprise: {X mb} → **{signal}**  
+- CL1–CL2 Spread: {X} → **{structure}**  
+- Crack Spread: {X} → **{demand signal}**
 
 ---
 
-## Roll Yield Insight
-{WRITE THIS MANUALLY}
+## Market Structure
 
-Example:
-At current levels (~$2.96), holding the front-month contract generates ~3% monthly roll yield, providing carry even if flat prices stabilize.
+### Inventory
+{1–2 lines max}
 
----
+### Curve
+{1–2 lines max}
 
-## Risk / Failure Scenario
-{WRITE THIS MANUALLY}
-
-Example:
-A sudden geopolitical de-escalation or a large inventory build (>5 mb) could rapidly flatten the curve and invalidate the bullish thesis.
+### Demand (Cracks)
+{1–2 lines max}
 
 ---
 
-## Market Drivers (Macro / Geopolitical)
-- {Driver 1}
-- {Driver 2}
-- {Driver 3}
+## Key Insight (The “So What?”)
+
+{THIS IS YOUR EDGE — 3–5 lines max}
+
+> {One strong sentence in quote format}
+
+---
+
+## What Changed?
+
+- {driver 1}
+- {driver 2}
+- {driver 3}
+
+---
+
+## Regime Classification
+
+- Prior: {regime}
+- Current: {regime}
+- Direction: {tightening / weakening / transition}
+
+---
+
+## Trade View
+
+### Positioning: {HIGH / MEDIUM / LOW CONVICTION}
+
+{1–2 lines}
+
+---
+
+### Decision Framework
+
+**Bullish Conditions**
+- {trigger 1}
+- {trigger 2}
+
+**Bearish Conditions**
+- {trigger 1}
+- {trigger 2}
+
+**Base Case**
+{1 clean sentence}
+
+---
+
+## Risk Scenarios
+
+### Downside
+- {risk}
+
+### Upside
+- {risk}
+
+---
+
+## Model Notes (Optional but VERY powerful for LinkedIn)
+
+### What Failed
+- {1–3 bullets}
+
+### Improvements
+- {1–3 bullets}
+
+---
+
+## Performance Snapshot
+
+- Win Rate: {X}  
+- Sharpe: {X}  
+- Max DD: {X}  
+
+---
+
+## Bottom Line
+
+> {ONE sharp sentence — this is what people remember}
 
 ---
 
 ## Charts
 
-### 1. Inventory vs Seasonal Range
+### Inventory vs Seasonal
 ![Inventory](charts/{DATE}/inventory_vs_5yr_band.png)
 
-### 2. WTI Futures Curve
+### Futures Curve
 ![Curve](charts/{DATE}/futures_curve.png)
 
-### 3. CL1–CL2 Spread (6M Trend)
+### Prompt Spread
 ![Spread](charts/{DATE}/spread_timeseries.png)
+
+### Crack Spread
+![Crack](charts/{DATE}/crack_spread.png)
+
+### Strategy Performance (Optional)
+![PnL](charts/{DATE}/pnl_curve.png)
+
+---
+
+## Final Report
+![Report](reports/{DATE}.pdf)
