@@ -1,5 +1,4 @@
 import pandas as pd
-from pipeline.expectations import get_expectations
 from pipeline.eia_ingestion import fetch_all_eia_series
 from pipeline.surprise_model import compute_all_surprises   
 from pipeline.curve_analytics import fetch_curve_data
@@ -64,13 +63,20 @@ def generate_brief(target_date=None):
         production_wow = None
 
 
-    #EXPECTATIONS
-    EXPECTATIONS = get_expectations()
+    # EXPECTATIONS — use the 5-year seasonal averages computed by compute_all_surprises()
+    # rather than hardcoded analyst stubs.  The surprise columns are already computed
+    # (actual_change - seasonal_avg) so we just read them directly.
+    EXPECTATIONS = {
+        "crude":       float(latest.get("seasonal_avg",              0)),
+        "gasoline":    float(latest.get("gasoline_seasonal_avg",     0)),
+        "distillates": float(latest.get("distillates_seasonal_avg",  0)),
+        "cushing":     float(latest.get("cushing_seasonal_avg",      0)),
+    }
 
-    crude_exp_surprise = latest["weekly_change"] - EXPECTATIONS["crude"]
-    gasoline_exp_surprise = latest["gasoline_million_bbl_change"] - EXPECTATIONS["gasoline"]
-    distillate_exp_surprise = latest["distillates_million_bbl_change"] - EXPECTATIONS["distillates"]
-    cushing_exp_surprise = latest["cushing_million_bbl_change"] - EXPECTATIONS["cushing"]
+    crude_exp_surprise       = float(latest.get("inventory_surprise",         0))
+    gasoline_exp_surprise    = float(latest.get("gasoline_surprise",          0))
+    distillate_exp_surprise  = float(latest.get("distillates_surprise",       0))
+    cushing_exp_surprise     = float(latest.get("cushing_surprise",           0))
 
     #CURVE DATA
     curve_df = fetch_curve_data()
