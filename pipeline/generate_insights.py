@@ -1,27 +1,60 @@
-def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread, regime, spread_change = 0.0, caution_flag = False, reversal_flag = False, event_override = None):
+import pandas as pd
+
+def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread, crack_change,refinery_util, refinery_change, crude_exp_surprise, gasoline_exp_surprise, distillate_exp_surprise, cushing_exp_surprise, spread_magnitude, spread_zscore, EXPECTATIONS, regime, spread_change = 0.0, caution_flag = False, reversal_flag = False, event_override = None):
     insights = {}
 
     inv_signal = inventory_row["signal"]
     inv_surprise = inventory_row["inventory_surprise"]
 
+    def classify_expectation_signal(x):
+        try:
+            x = float(x)
+        except (TypeError, ValueError):
+            return "neutral"
 
-    divergence = False
+        if pd.isna(x):
+            return "neutral"
+        if x < -1:
+            return "bullish"   # bigger draw than expected
+        if x > 1:
+            return "bearish"   # bigger build than expected
+        return "neutral"
 
-    #INVENTORY VIEW
-    if inv_signal == "bullish":
-        inv_view = "Bullish inventory surprise (draw vs seasonal)"
-    elif inv_signal == "bearish":
-        inv_view = "Bearish inventory surprise (build vs seasonal)"
+    crude_exp_signal = classify_expectation_signal(crude_exp_surprise)
+    gas_exp_signal = classify_expectation_signal(gasoline_exp_surprise)
+    dist_exp_signal = classify_expectation_signal(distillate_exp_surprise)
+    cushing_exp_signal = classify_expectation_signal(cushing_exp_surprise)
+
+    # =========================
+    # Inventory View
+    # =========================
+    if crude_exp_surprise > 1:
+        inv_view = "Bearish vs expectations (build above consensus)"
+    elif crude_exp_surprise < -1:
+        inv_view = "Bullish vs expectations (draw below consensus)"
     else:
-        inv_view = "Neutral inventory signal"
+        inv_view = "Neutral vs expectations"
+
+    if inv_signal == "bullish":
+        inv_view += " | Bullish vs seasonal"
+    elif inv_signal == "bearish":
+        inv_view += " | Bearish vs seasonal"
+    else:
+        inv_view += " | Neutral vs seasonal"
 
     insights["inventory_view"] = inv_view
 
-    #CURVE VIEW 
+    divergence = False
+
+    # =========================
+    # Curve View
+    # =========================
     curve_view = f"{curve_structure} (CL1–CL2: {curve_spread:.2f})"
     insights["curve_view"] = curve_view
 
-    #CRACK SPREAD VIEW
+    # =========================
+    # Crack / Demand View
+    # =========================
     if crack_spread > 25:
         crack_view = f"Strong refinery margins (Crack: {crack_spread:.2f}) — strong demand"
         demand_signal = "bullish"
@@ -34,9 +67,85 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     insights["crack_view"] = crack_view
 
-    #DIVERGENCE DETECTION
+    # =========================
+    # Spread Regime
+    # IMPORTANT:
+    # spread > 0 = backwardation
+    # spread < 0 = contango
+    # =========================
+    def classify_spread_regime(magnitude, zscore, spread):
+        # spread = CL1 - CL2: positive = backwardation, negative = contango
+        # zscore = (spread - rolling_mean) / rolling_std
+        #   high positive zscore → unusually tight (backwardation extreme)
+        #   high negative zscore → unusually loose (contango extreme)
+        if spread > 0:  # backwardation
+            if zscore > 2:
+                return "CRISIS TIGHTNESS"
+            elif zscore > 1:
+                return "STRONG BACKWARDATION"
+            else:
+                return "NORMAL BACKWARDATION"
+        else:  # contango
+            if zscore < -2:
+                return "DEEP CONTANGO"
+            else:
+                return "MILD CONTANGO"
+
+    spread_regime = classify_spread_regime(
+        spread_magnitude,
+        spread_zscore,
+        curve_spread,
+    )
+    insights["spread_regime"] = spread_regime
+
+    # =========================
+    # Product Demand
+    # =========================
+    gas_signal = inventory_row.get("gasoline_signal", None)
+    dist_signal = inventory_row.get("distillates_signal", None)
+
+    product_bias = 0
+
+    if gas_signal == "bullish":
+        product_bias += 1
+    elif gas_signal == "bearish":
+        product_bias -= 1
+
+    if dist_signal == "bullish":
+        product_bias += 1
+    elif dist_signal == "bearish":
+        product_bias -= 1
+
+    if product_bias >= 2:
+        demand_signal = "bullish"
+        insights["product_view"] = "Strong product demand (gasoline + distillates draws)"
+    elif product_bias <= -2:
+        demand_signal = "bearish"
+        insights["product_view"] = "Weak product demand (builds across products)"
+    else:
+        insights["product_view"] = "Mixed product signals"
+
+    # =========================
+    # Cushing Distortion
+    # =========================
+    cushing_change = inventory_row.get("cushing_million_bbl_change", 0)
+    cushing_flag = False
+
+    if abs(cushing_change) > 2:
+        cushing_flag = True
+        insights["cushing_flag"] = "Cushing distortion affecting headline crude"
+    else:
+        insights["cushing_flag"] = "No major Cushing distortion"
+
+    # =========================
+    # Divergence / Alignment
+    # IMPORTANT:
+    # spread > 0 = backwardation
+    # spread < 0 = contango
+    # =========================
     is_backwardation = curve_spread > 0
     is_contango = curve_spread < 0
+
     if inv_signal == "bearish" and is_backwardation:
         combined = "BULLISH DIVERGENCE: Physical tightness overriding inventory builds"
         final_signal = "BULLISH"
@@ -68,52 +177,85 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
             combined = "Mixed signals across supply, demand, and curve"
             final_signal = "NEUTRAL"
 
-    insights["combined_view"] = combined
-    insights["final_signal"] = final_signal
-
-    #Event Override
-    if event_override == "CEASEFIRE" or event_override == "DE_ESCALATION":
+    # =========================
+    # Event Override
+    # =========================
+    if event_override in {"CEASEFIRE", "DE_ESCALATION"}:
         combined = "EVENT OVERRIDE: Geopolitical de-escalation likely compresses prompt risk premium"
         final_signal = "BEARISH"
-
-    elif event_override == "SUPPLY_SHOCK" or event_override == "ESCALATION":
+    elif event_override in {"SUPPLY_SHOCK", "ESCALATION"}:
         combined = "EVENT OVERRIDE: Geopolitical escalation reinforces prompt scarcity"
         final_signal = "BULLISH"
 
     insights["combined_view"] = combined
     insights["final_signal"] = final_signal
 
-    #Regime View  
+    # =========================
+    # Expectation Table
+    # =========================
+    insights["expectation_table"] = {
+        "crude": {
+            "actual": float(inventory_row.get("weekly_change", 0)),
+            "expected": float(EXPECTATIONS.get("crude", 0)),
+            "surprise": float(crude_exp_surprise),
+            "signal": crude_exp_signal,
+        },
+        "gasoline": {
+            "actual": float(inventory_row.get("gasoline_million_bbl_change", 0)),
+            "expected": float(EXPECTATIONS.get("gasoline", 0)),
+            "surprise": float(gasoline_exp_surprise),
+            "signal": gas_exp_signal,
+        },
+        "distillates": {
+            "actual": float(inventory_row.get("distillates_million_bbl_change", 0)),
+            "expected": float(EXPECTATIONS.get("distillates", 0)),
+            "surprise": float(distillate_exp_surprise),
+            "signal": dist_exp_signal,
+        },
+        "cushing": {
+            "actual": float(inventory_row.get("cushing_million_bbl_change", 0)),
+            "expected": float(EXPECTATIONS.get("cushing", 0)),
+            "surprise": float(cushing_exp_surprise),
+            "signal": cushing_exp_signal,
+        },
+    }
+
+    # =========================
+    # Regime View
+    # =========================
     insights["regime"] = regime
 
     if regime == "CRISIS_TIGHTNESS":
         insights["regime_view"] = "Extreme physical tightness — panic pricing"
-
     elif regime == "CRISIS_UNWIND":
         insights["regime_view"] = "Extreme tightness collapsing — high reversal risk"
-
     elif regime == "TIGHT":
         insights["regime_view"] = "Strong backwardation — supportive"
-
+    elif regime == "NORMAL_TIGHT":
+        insights["regime_view"] = "Mild backwardation — modestly supportive"
     elif regime == "WEAKENING_TIGHTNESS":
         insights["regime_view"] = "Backwardation weakening — caution"
-
+    elif regime == "BALANCED":
+        insights["regime_view"] = "Balanced market — flat curve"
+    elif regime == "RECOVERING_BALANCE":
+        insights["regime_view"] = "Contango recovering — improving balance"
     elif regime == "OVERSUPPLIED":
-        insights["regime_view"] = "Contango — oversupply"
-
+        insights["regime_view"] = "Mild contango — oversupplied"
+    elif regime == "DEEP_CONTANGO":
+        insights["regime_view"] = "Deep contango — severe oversupply"
     else:
         insights["regime_view"] = "Balanced market"
 
-    #CONFIDENCE SCORE 
+    # =========================
+    # Confidence Score
+    # =========================
     confidence = 0
 
-    # Inventory strength
     if abs(inv_surprise) > 5:
         confidence += 2
     elif abs(inv_surprise) > 2:
         confidence += 1
 
-    # Curve strength
     abs_spread = abs(curve_spread)
     if abs_spread > 10:
         confidence += 4
@@ -124,38 +266,37 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
     elif abs_spread > 0.5:
         confidence += 1
 
-    # Demand strength
     if crack_spread > 30:
         confidence += 2
     elif crack_spread > 20:
         confidence += 1
 
-    # Divergence / alignment
     if divergence:
         confidence += 2
     elif "STRONG" in final_signal:
         confidence += 1
 
-    # Regime adjustments
     if regime in ["WEAKENING_TIGHTNESS", "CRISIS_UNWIND"]:
-        confidence -= 1 
+        confidence -= 1
     elif regime == "EXTREME_DISLOCATION":
         confidence -= 2
-    
 
-    # Momentum adjustment
+    # Positive spread_change = backwardation strengthening
+    # Negative spread_change = backwardation weakening / contango widening
     if spread_change < -2:
         confidence -= 1
     if abs(spread_change) > 3:
         confidence -= 1
 
-    # Event adjustment
     if event_override is not None:
-        confidence -= 1 #macro uncertainty 
+        confidence -= 1
     if event_override in {"CEASEFIRE", "DE_ESCALATION"}:
         confidence -= 2
     elif event_override in {"SUPPLY_SHOCK", "ESCALATION"}:
         confidence += 1
+
+    if cushing_flag:
+        confidence -= 1
 
     confidence = max(confidence, 0)
 
@@ -172,12 +313,13 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     insights["confidence"] = confidence_label
 
-    
-    #TRADE IDEA (REGIME-AWARE)
+    # =========================
+    # Trade Idea
+    # =========================
     if event_override in {"CEASEFIRE", "DE_ESCALATION"}:
         trade = (
-            "Reduce or fade prompt bullish exposure. "
-            "Geopolitical de-escalation can rapidly compress backwardation and remove crisis premium."
+            "Fade prompt strength. Avoid fresh longs. "
+            "Position for continued backwardation compression unless geopolitical risk re-escalates."
         )
 
     elif reversal_flag or regime == "CRISIS_UNWIND":
@@ -206,27 +348,32 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
 
     elif final_signal == "STRONG BULLISH":
         trade = "Long WTI and long prompt spreads."
-
     elif final_signal == "STRONG BEARISH":
         trade = "Short WTI and short spreads."
-
     elif final_signal == "BULLISH":
         trade = "Long WTI or position for strengthening backwardation."
-
     elif final_signal == "BEARISH":
         trade = "Short WTI or position for widening contango."
-
     else:
         trade = "No clear edge. Stay neutral."
 
     insights["trade_idea"] = trade
 
-    
-    # NARRATIVE (REGIME-AWARE)
+    # =========================
+    # Narrative
+    # =========================
+    insights["narrative"] = (
+        f"{combined}. Demand signal: {demand_signal}. "
+        f"Spread momentum: {spread_change:.2f}. "
+        f"{'Cushing distortion present.' if cushing_flag else ''}"
+    )
+
     if event_override in {"CEASEFIRE", "DE_ESCALATION"}:
         insights["narrative"] = (
-            "EVENT-DRIVEN NORMALIZATION: Geopolitical de-escalation is likely compressing prompt risk premium. "
-            "Even if structure remains backwardated, the market may be transitioning out of crisis pricing."
+            "EVENT-DRIVEN NORMALIZATION: Crude inventories printed above expectations "
+            "(bearish), while product draws indicate resilient demand. "
+            f"However, rapid spread compression ({spread_change:.2f}) confirms "
+            "that geopolitical risk premium is unwinding and dominating price action."
         )
 
     elif reversal_flag or regime == "CRISIS_UNWIND":
@@ -254,16 +401,55 @@ def generate_insights(inventory_row, curve_structure, curve_spread, crack_spread
         )
 
     else:
-        insights["narrative"] = "Market signals broadly aligned with fundamentals."
+        insights["narrative"] = (
+            "Market signals broadly aligned: inventory, demand, and curve structure "
+            "support the current directional bias."
+        )
 
-    # METRICS OUTPUT
+    # =========================
+    # Metrics Output
+    # =========================
     insights["inventory_level"] = inventory_row["value_million_bbl"]
     insights["weekly_change"] = inventory_row["weekly_change"]
     insights["seasonal_avg"] = inventory_row["seasonal_avg"]
     insights["inventory_surprise"] = inventory_row["inventory_surprise"]
+
+    insights["gasoline_change"] = inventory_row.get("gasoline_million_bbl_change")
+    insights["gasoline_seasonal_avg"] = inventory_row.get("gasoline_seasonal_avg")
+    insights["gasoline_surprise"] = inventory_row.get("gasoline_surprise")
+    insights["gasoline_signal"] = inventory_row.get("gasoline_signal")
+
+    insights["distillates_change"] = inventory_row.get("distillates_million_bbl_change")
+    insights["distillates_seasonal_avg"] = inventory_row.get("distillates_seasonal_avg")
+    insights["distillates_surprise"] = inventory_row.get("distillates_surprise")
+    insights["distillates_signal"] = inventory_row.get("distillates_signal")
+
+    insights["cushing_change"] = inventory_row.get("cushing_million_bbl_change")
+    insights["cushing_seasonal_avg"] = inventory_row.get("cushing_seasonal_avg")
+    insights["cushing_surprise"] = inventory_row.get("cushing_surprise")
+    insights["cushing_signal"] = inventory_row.get("cushing_signal")
+
+    insights["refinery_util"] = refinery_util
+    insights["refinery_change"] = refinery_change
+
+    insights["spread_zscore"] = spread_zscore
+    insights["spread_magnitude"] = spread_magnitude
     insights["spread"] = curve_spread
-    insights["crack_spread"] = crack_spread
     insights["spread_change"] = spread_change
+
+    insights["crack_spread"] = crack_spread
+    insights["crack_change"] = crack_change
+
+    insights["crude_exp_surprise"] = crude_exp_surprise
+    insights["gasoline_exp_surprise"] = gasoline_exp_surprise
+    insights["distillate_exp_surprise"] = distillate_exp_surprise
+    insights["cushing_exp_surprise"] = cushing_exp_surprise
+
+    insights["crude_exp_signal"] = crude_exp_signal
+    insights["gasoline_exp_signal"] = gas_exp_signal
+    insights["distillate_exp_signal"] = dist_exp_signal
+    insights["cushing_exp_signal"] = cushing_exp_signal
+
     insights["event_override"] = event_override
 
     return insights

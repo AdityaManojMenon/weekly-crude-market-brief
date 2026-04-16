@@ -121,19 +121,24 @@ def _base_layout(title: str, x_title: str, y_title: str) -> dict:
     )
 
 
-def _save(fig: go.Figure, filename: str) -> str:
-    date_str = datetime.today().strftime("%Y-%m-%d")
+def _save(fig: go.Figure, filename: str, report_date=None) -> str:
+    if report_date is None:
+        report_date = datetime.today()
+
+    date_str = pd.to_datetime(report_date).strftime("%Y-%m-%d")
     folder = f"charts/{date_str}"
     os.makedirs(folder, exist_ok=True)
+
     path = f"{folder}/{filename}"
     fig.write_image(path, scale=2)
+
     return path
 
 
 # ─────────────────────────────────────────────
 #  1.  INVENTORY vs SEASONAL BAND
 # ─────────────────────────────────────────────
-def plot_inventory_vs_seasonal(df):
+def plot_inventory_vs_seasonal(df, report_date=None):
     df = df.copy()
     df["year"] = df["period"].dt.year
     df["week"] = df["period"].dt.isocalendar().week.astype(int)
@@ -200,7 +205,7 @@ def plot_inventory_vs_seasonal(df):
     fig.update_layout(**layout)
     _add_footer(fig, include_timestamp=False)   # EIA = weekly data, no intraday ts
 
-    return _save(fig, "inventory_vs_5yr_band.png")
+    return _save(fig, "inventory_vs_5yr_band.png", report_date)
 
 
 # ─────────────────────────────────────────────
@@ -208,7 +213,7 @@ def plot_inventory_vs_seasonal(df):
 #      6-month strip for a realistic curve shape
 #      ★ timestamp ON — prices go stale fast
 # ─────────────────────────────────────────────
-def plot_futures_curve_snapshot(cl1_price: float, cl2_price: float):
+def plot_futures_curve_snapshot(cl1_price: float, cl2_price: float, report_date=None):
     """
     Renders a 6-contract futures strip (M1–M6).
     M1 = cl1_price, M2 = cl2_price.
@@ -306,91 +311,106 @@ def plot_futures_curve_snapshot(cl1_price: float, cl2_price: float):
     # ★ Timestamp — futures prices are time-sensitive
     _add_footer(fig, include_timestamp=True)
 
-    return _save(fig, "futures_curve.png")
+    return _save(fig, "futures_curve.png", report_date)
 
 
 # ─────────────────────────────────────────────
 #  3.  SPREAD TIME SERIES
 #      auto-detects peak inflection for callout
 # ─────────────────────────────────────────────
-def plot_spread_timeseries(curve_df, inflection_date=None, inflection_label=None):
+def plot_spread_timeseries(curve_df, inflection_date=None, inflection_label=None,report_date=None):
     """
     curve_df         : DataFrame with 'spread' column, DatetimeIndex
     inflection_date  : pd.Timestamp for callout (auto-detects abs max if omitted)
     inflection_label : override label text (e.g. "Supply Crunch Peak – Apr 5")
     """
     spread     = curve_df["spread"]
-    pos_spread = spread.where(spread >= 0)
-    neg_spread = spread.where(spread <= 0)
+    # spread = CL1 - CL2  →  positive = backwardation (tight), negative = contango (oversupplied)
+    pos_spread = spread.where(spread >= 0)   # backwardation zone
+    neg_spread = spread.where(spread <= 0)   # contango zone
 
     fig = go.Figure()
 
     fig.add_hline(y=0, line=dict(color=BBG_BORDER, width=1, dash="dot"))
 
+    # BACKWARDATION (positive spread → green)
     fig.add_trace(go.Scatter(
         x=curve_df.index, y=pos_spread,
         mode="lines", line=dict(width=0),
         fill="tozeroy", fillcolor="rgba(0,217,126,0.15)",
-        showlegend=False, hoverinfo="skip",
+        showlegend=False,
     ))
+
+    # CONTANGO (negative spread → red)
     fig.add_trace(go.Scatter(
         x=curve_df.index, y=neg_spread,
         mode="lines", line=dict(width=0),
         fill="tozeroy", fillcolor="rgba(255,59,59,0.15)",
-        showlegend=False, hoverinfo="skip",
+        showlegend=False,
     ))
+
+    # MAIN LINE
     fig.add_trace(go.Scatter(
         x=curve_df.index, y=spread,
         mode="lines",
         line=dict(color=BBG_GREEN, width=2),
         name="CL1–CL2 Spread",
-        hovertemplate="<b>%{x}</b><br>Spread: $%{y:.2f}<extra></extra>",
     ))
 
-    layout = _base_layout(
+    fig.update_layout(**_base_layout(
         title="WTI PROMPT SPREAD  ·  CL1 – CL2",
         x_title="Date",
         y_title="Spread (USD)",
-    )
-    fig.update_layout(**layout)
+    ))
 
-    fig.add_annotation(
-        text="BACKWARDATION", xref="paper", yref="paper",
-        x=0.01, y=0.97, showarrow=False,
-        font=dict(size=9, color=BBG_GREEN, family=FONT_FAMILY),
-        xanchor="left",
-    )
-    fig.add_annotation(
-        text="CONTANGO", xref="paper", yref="paper",
-        x=0.01, y=0.03, showarrow=False,
-        font=dict(size=9, color=BBG_RED, family=FONT_FAMILY),
-        xanchor="left",
-    )
+    # Labels — positive spread = backwardation (green), negative = contango (red)
+    if spread.max() > 0:
+        fig.add_annotation(
+            xref="paper", yref="y",
+            x=0.01, y=spread.max() * 0.8,
+            text="BACKWARDATION",
+            showarrow=False,
+            font=dict(color=BBG_GREEN, size=11),
+        )
 
-    # ── "So What?" callout ──────────────────────────────────────────
+    if spread.min() < 0:
+        fig.add_annotation(
+            xref="paper", yref="y",
+            x=0.01, y=spread.min() * 0.8,
+            text="CONTANGO",
+            showarrow=False,
+            font=dict(color=BBG_RED, size=11),
+        )
+
+    # Inflection
     if inflection_date is None:
         inflection_date = spread.abs().idxmax()
+
     peak_val = float(spread.loc[inflection_date])
-    label    = inflection_label or (
+
+    label = inflection_label or (
         "Supply Crunch Peak" if peak_val > 0 else "Contango Extreme"
     )
+
     _add_callout(
         fig,
-        x=inflection_date, y=peak_val,
+        x=inflection_date,
+        y=peak_val,
         label=label,
-        ax=-70, ay=-50,
+        ax=-70,
+        ay=-50,
         color=BBG_AMBER,
     )
 
     _add_footer(fig, include_timestamp=False)
 
-    return _save(fig, "spread_timeseries.png")
+    return _save(fig, "spread_timeseries.png", report_date)
 
 
 # ─────────────────────────────────────────────
 #  4.  3-2-1 CRACK SPREAD
 # ─────────────────────────────────────────────
-def plot_crack_spread(df):
+def plot_crack_spread(df, report_date=None):
     crack   = df["crack_spread"]
     rolling = crack.rolling(30, min_periods=1).mean()
 
@@ -436,12 +456,12 @@ def plot_crack_spread(df):
     fig.update_layout(**layout)
     _add_footer(fig, include_timestamp=False)
 
-    return _save(fig, "crack_spread.png")
+    return _save(fig, "crack_spread.png", report_date)
 
 # ─────────────────────────────────────────────
 #  5.  PnL CURVE  +  DRAWDOWN (2-panel)
 # ─────────────────────────────────────────────
-def plot_pnl_drawdown(df: pd.DataFrame, win_rate: float, sharpe: float | None, max_dd: float) -> str:
+def plot_pnl_drawdown(df: pd.DataFrame, win_rate: float, sharpe: float | None, max_dd: float, report_date=None) -> str:
     """
     df       : output of compute_cumulative_returns() — must have 'date',
                'wealth_growth', 'drawdown', and optionally 'return_pct' columns
@@ -518,7 +538,7 @@ def plot_pnl_drawdown(df: pd.DataFrame, win_rate: float, sharpe: float | None, m
             font=dict(size=10, color=BBG_TEXT),
             orientation="h",
             yanchor="bottom", y=1.02,
-            xanchor="right", x=0.99,   # ✅ move to right
+            xanchor="right", x=0.99,   
         ),
         margin=dict(l=65, r=40, t=110, b=55),
         xaxis=dict(**axis_common),
@@ -533,4 +553,269 @@ def plot_pnl_drawdown(df: pd.DataFrame, win_rate: float, sharpe: float | None, m
 
     _add_footer(fig, include_timestamp=True)
 
-    return _save(fig, "pnl_curve.png")
+    return _save(fig, "pnl_curve.png", report_date)
+
+# ─────────────────────────────────────────────
+#  7.  PRODUCT INVENTORY SNAPSHOT
+#      Weekly change bar chart for Gasoline,
+#      Distillates, and Cushing crude stocks
+# ─────────────────────────────────────────────
+def plot_product_snapshot(df: pd.DataFrame, report_date=None) -> str:
+    """
+    df : must contain columns:
+         'gasoline_million_bbl_change', 'distillates_million_bbl_change',
+         'cushing_million_bbl_change'
+    Uses the most recent row (iloc[-1]).
+    Color logic: draw < 0 = bullish (green), build > 0 = bearish (red).
+    """
+    latest = df.iloc[-1]
+ 
+    labels = ["Gasoline", "Distillates", "Cushing"]
+    values = [
+        latest["gasoline_million_bbl_change"],
+        latest["distillates_million_bbl_change"],
+        latest["cushing_million_bbl_change"],
+    ]
+ 
+    # draw (negative) = supply tightening = bullish = green
+    # build (positive) = supply loosening = bearish = red
+    bar_colors  = [BBG_GREEN if v < 0 else BBG_RED for v in values]
+    text_colors = [BBG_GREEN if v < 0 else BBG_RED for v in values]
+ 
+    fig = go.Figure()
+ 
+    # Zero reference line
+    fig.add_hline(y=0, line=dict(color=BBG_BORDER, width=1, dash="dot"))
+ 
+    fig.add_trace(go.Bar(
+        x=labels,
+        y=values,
+        marker_color=bar_colors,
+        marker_line=dict(color=BBG_BG, width=1.5),
+        text=[f"{'▼' if v < 0 else '▲'} {abs(v):.2f} mbbl" for v in values],
+        textposition="outside",
+        textfont=dict(size=11, family=FONT_FAMILY, color=text_colors),
+        width=0.45,
+        hovertemplate="<b>%{x}</b><br>Change: %{y:+.2f} mbbl<extra></extra>",
+    ))
+ 
+    # Sentiment label inside each bar
+    for label, val in zip(labels, values):
+        sentiment  = "BULLISH DRAW" if val < 0 else "BEARISH BUILD"
+        sent_color = BBG_GREEN if val < 0 else BBG_RED
+        fig.add_annotation(
+            x=label, y=val * 0.5,
+            text=f"<b>{sentiment}</b>",
+            showarrow=False,
+            font=dict(size=8, color=sent_color, family=FONT_FAMILY),
+            align="center",
+        )
+ 
+    layout = _base_layout(
+        title="PRODUCT INVENTORY SNAPSHOT  ·  Weekly Change (MMbbl)",
+        x_title="",
+        y_title="Change (Million Barrels)",
+    )
+ 
+    # Widen y range so outside text labels don't clip
+    max_abs = max(abs(v) for v in values)
+    layout["yaxis"]["range"]      = [-(max_abs * 1.55), max_abs * 1.55]
+    layout["yaxis"]["ticksuffix"] = " mbbl"
+    layout["xaxis"]["showgrid"]   = False
+    layout["hovermode"]           = "closest"
+ 
+    fig.update_layout(**layout)
+ 
+    # Week-ending date badge
+    try:
+        if "period" in latest.index:
+            week_end = pd.to_datetime(latest["period"]).strftime("%b %d, %Y")
+        elif "date" in latest.index:
+            week_end = pd.to_datetime(latest["date"]).strftime("%b %d, %Y")
+        else:
+            week_end = ""
+
+        fig.add_annotation(
+            text=f"Week ending  {week_end}",
+            xref="paper", yref="paper", x=0.01, y=1.02,
+            showarrow=False,
+            font=dict(size=9, color=BBG_SUBTEXT, family=FONT_FAMILY),
+            xanchor="left",
+        )
+    except Exception:
+        pass
+ 
+    # Net summary badge (top-right)
+    net       = sum(values)
+    net_label = (
+        f"Net: {'+' if net >= 0 else ''}{net:.2f} mbbl<br>"
+        f"{'Overall Bearish Build' if net > 0 else 'Overall Bullish Draw'}"
+    )
+    net_color = BBG_RED if net > 0 else BBG_GREEN
+    fig.add_annotation(
+        text=f"<b>{net_label}</b>",
+        xref="paper", yref="paper", x=0.99, y=0.97,
+        showarrow=False,
+        font=dict(size=10, color=net_color, family=FONT_FAMILY),
+        xanchor="right",
+        bgcolor="rgba(20,20,20,0.80)",
+        bordercolor=net_color, borderwidth=1, borderpad=6,
+    )
+ 
+    _add_footer(fig, include_timestamp=False)
+ 
+    return _save(fig, "product_snapshot.png", report_date)
+
+
+# ─────────────────────────────────────────────
+#  8.  MARKET SNAPSHOT TICKER BOARD
+#      Bloomberg-style grid of prices + WoW Δ
+#      ★ timestamp ON — prices go stale fast
+# ─────────────────────────────────────────────
+def plot_market_snapshot(snap: dict, report_date=None) -> str:
+    """
+    snap : dict returned by pipeline.market_snapshot.fetch_market_snapshot()
+           Keys: WTI, BRENT, NAT_GAS, RBOB, HEATING_OIL, DXY, SP500
+           Each value has: price, wow_change, wow_pct  (may be None if unavailable)
+
+    Renders a Bloomberg-style ticker board with two rows:
+        Row 1: Energy commodities
+        Row 2: Macro / cross-asset
+    """
+    # ── display config ──────────────────────────────────────────────────────
+    ROWS = [
+        [
+            ("WTI_CRUDE",    "WTI CRUDE",   "$/bbl"),
+            ("BRENT",        "BRENT",       "$/bbl"),
+            ("NAT_GAS",      "NAT GAS",     "$/MMBtu"),
+            ("RBOB",         "RBOB",        "$/gal"),
+            ("HEATING_OIL",  "HEATING OIL", "$/gal"),
+        ],
+        [
+            ("DXY",   "DXY",   "index"),
+            ("SP500", "S&P 500", "pts"),
+        ],
+    ]
+
+    # Flatten for layout maths
+    all_cells = [cell for row in ROWS for cell in row]
+    n_cols    = max(len(row) for row in ROWS)
+    n_rows    = len(ROWS)
+
+    fig_height = 280
+    fig_width  = 1100
+
+    fig = go.Figure()
+
+    fig.update_layout(
+        paper_bgcolor=BBG_BG,
+        plot_bgcolor=BBG_BG,
+        font=dict(family=FONT_FAMILY, color=BBG_TEXT),
+        width=fig_width,
+        height=fig_height,
+        margin=dict(l=20, r=20, t=60, b=40),
+        xaxis=dict(visible=False, range=[0, 1]),
+        yaxis=dict(visible=False, range=[0, 1]),
+        title=dict(
+            text="MARKET SNAPSHOT  ·  Prices & Week-over-Week Changes",
+            font=dict(family=FONT_FAMILY, size=14, color=BBG_ORANGE),
+            x=0.01, xanchor="left",
+        ),
+    )
+
+    # ── grid layout ─────────────────────────────────────────────────────────
+    col_w = 1.0 / n_cols
+    row_h = 0.42   # fraction of normalised y-space per row (leaves margin)
+
+    for r_idx, row in enumerate(ROWS):
+        n_in_row  = len(row)
+        row_col_w = 1.0 / n_in_row
+        # centre short rows
+        x_offset = (1.0 - n_in_row * row_col_w) / 2
+
+        y_centre = 0.72 - r_idx * 0.50   # top row ~0.72, bottom ~0.22
+
+        for c_idx, (key, label, unit) in enumerate(row):
+            data = snap.get(key, {})
+            price      = data.get("price")
+            wow_change = data.get("wow_change")
+            wow_pct    = data.get("wow_pct")
+
+            x_centre = x_offset + (c_idx + 0.5) * row_col_w
+
+            if price is None:
+                price_str = "N/A"
+                wow_str   = "—"
+                cell_color = BBG_SUBTEXT
+            else:
+                # Format price — large indices (S&P) use comma notation
+                if price > 999:
+                    price_str = f"{price:,.0f}"
+                elif price > 10:
+                    price_str = f"{price:.2f}"
+                else:
+                    price_str = f"{price:.3f}"
+
+                if wow_change is not None and wow_pct is not None:
+                    sign      = "+" if wow_change >= 0 else ""
+                    cell_color = BBG_GREEN if wow_change >= 0 else BBG_RED
+                    wow_str   = f"{sign}{wow_change:.2f}  ({sign}{wow_pct:.2f}%)"
+                else:
+                    wow_str   = "—"
+                    cell_color = BBG_SUBTEXT
+
+            # ── Cell box ────────────────────────────────────────────────────
+            fig.add_shape(
+                type="rect",
+                xref="paper", yref="paper",
+                x0=x_centre - row_col_w * 0.46,
+                x1=x_centre + row_col_w * 0.46,
+                y0=y_centre - 0.22,
+                y1=y_centre + 0.22,
+                fillcolor=BBG_PANEL,
+                line=dict(color=BBG_BORDER, width=1),
+            )
+
+            # Label (top)
+            fig.add_annotation(
+                xref="paper", yref="paper",
+                x=x_centre, y=y_centre + 0.13,
+                text=f"<b>{label}</b>",
+                showarrow=False,
+                font=dict(size=9, color=BBG_SUBTEXT, family=FONT_FAMILY),
+                xanchor="center",
+            )
+
+            # Price (middle — large)
+            fig.add_annotation(
+                xref="paper", yref="paper",
+                x=x_centre, y=y_centre + 0.02,
+                text=f"<b>{price_str}</b>",
+                showarrow=False,
+                font=dict(size=16, color=BBG_AMBER, family=FONT_FAMILY),
+                xanchor="center",
+            )
+
+            # Unit (small, below price)
+            fig.add_annotation(
+                xref="paper", yref="paper",
+                x=x_centre, y=y_centre - 0.08,
+                text=unit,
+                showarrow=False,
+                font=dict(size=8, color=BBG_SUBTEXT, family=FONT_FAMILY),
+                xanchor="center",
+            )
+
+            # WoW change (bottom — coloured)
+            fig.add_annotation(
+                xref="paper", yref="paper",
+                x=x_centre, y=y_centre - 0.17,
+                text=f"WoW  {wow_str}",
+                showarrow=False,
+                font=dict(size=9, color=cell_color, family=FONT_FAMILY),
+                xanchor="center",
+            )
+
+    _add_footer(fig, include_timestamp=True)
+
+    return _save(fig, "market_snapshot.png", report_date)

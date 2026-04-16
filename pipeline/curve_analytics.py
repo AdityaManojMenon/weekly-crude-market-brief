@@ -2,72 +2,90 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
+
 def get_active_month_codes():
-    """Returns the current and next month codes for WTI Crude."""
-    # Standard Futures Month Codes
-    codes = ['F', 'G', 'H', 'J', 'K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z']
+    """Returns front and second WTI futures contracts"""
+    codes = ['F','G','H','J','K','M','N','Q','U','V','X','Z']
+
     now = datetime.now()
-    
-    # Crude usually rolls around the 20th. 
-    # Today is March 26, the 'Front' month is likely May (K) 
-    # because the April (J) contract is heading into delivery/expiry.
+
+    # roll logic
     if now.day > 20:
         now += timedelta(days=20)
-    
-    # We want the next two available months
-    m1_idx = (now.month) % 12 
-    m2_idx = (now.month + 1) % 12
-    
-    year1 = now.year
-    year2 = year1 + 1 if m2_idx == 0 else year1
 
-    y1_str = str(year1)[-2:] 
-    y2_str = str(year2)[-2:]
-    
-    # Ticker format: CL + Code + Year + .NYM
-    # Example: CLK26.NYM
-    return f"CL{codes[m1_idx]}{y1_str}.NYM", f"CL{codes[m2_idx]}{y2_str}.NYM"
+    m1 = now.month % 12
+    m2 = (now.month + 1) % 12
+
+    y1 = str(now.year)[-2:]
+    y2 = str(now.year + 1 if m2 == 0 else now.year)[-2:]
+
+    return f"CL{codes[m1]}{y1}.NYM", f"CL{codes[m2]}{y2}.NYM"
+
 
 def fetch_curve_data():
-    t1, t2 = get_active_month_codes()
-    print(f"Attempting to fetch: {t1} and {t2}")
+    print("Fetching WTI curve data (CL1, CL2)...")
 
-    # Explicitly fetch the specific monthly contracts
-    cl1 = yf.download(t1, period="3mo")
-    cl2 = yf.download(t2, period="3mo")
+    # -------------------------------
+    # STEP 1: Try Yahoo generic tickers
+    # -------------------------------
+    try:
+        cl1 = yf.download("CL=F", period="6mo", progress=False)
+        cl2 = yf.download("CL2=F", period="6mo", progress=False)
 
-    if cl1 is not None and cl2 is not None and not cl1.empty and not cl2.empty:
-        df = pd.DataFrame({
-            "CL1": cl1["Close"].squeeze(),
-            "CL2": cl2["Close"].squeeze()
-        }).dropna()
-        df["spread"] = df["CL1"] - df["CL2"]
-        return df
+        if cl2 is None or cl2.empty:
+            raise Exception("CL2 failed")
 
-    return None
+        print("Using Yahoo generic tickers (CL=F, CL2=F)")
 
-def main():
-    df = fetch_curve_data()
-    if df is not None:
-        print("\n--- Crude Oil Term Structure (Spread) ---")
-        print(df.tail())
+    except:
+        print("CL2=F failed → fallback to manual contracts")
 
-        last_spread = df["spread"].iloc[-1]
-        if last_spread > 2:
-            structure = "Extreme Backwardation"
-        elif last_spread > 1:
-            structure = "Strong Backwardation"
-        elif last_spread > 0:
-            structure = "Mild Backwardation"
-        elif last_spread < -1.5:
-            structure = "Extreme Contango"
-        elif last_spread < -1:
-            structure = "Strong Contango"
-        else:
-            structure = "Mild Contango"
+        t1, t2 = get_active_month_codes()
+        print(f"Using contracts: {t1}, {t2}")
 
-        print(structure, last_spread)
-        print(f"\nCurrent Market State: {structure} (${last_spread:.2f})")
+        cl1 = yf.download(t1, period="6mo", progress=False)
+        cl2 = yf.download(t2, period="6mo", progress=False)
 
-if __name__ == "__main__":
-    main()
+    # -------------------------------
+    # STEP 2: VALIDATION
+    # -------------------------------
+    if cl1 is None or cl2 is None or cl1.empty or cl2.empty:
+        raise ValueError("Curve data unavailable (both methods failed)")
+
+    # -------------------------------
+    # STEP 3: ALIGN INDEXES (CRITICAL FIX)
+    # -------------------------------
+    cl1_close = cl1["Close"].squeeze()
+    cl2_close = cl2["Close"].squeeze()
+
+    df = pd.concat([
+        cl1_close.rename("CL1"),
+        cl2_close.rename("CL2")
+    ], axis=1).dropna()
+
+    # -------------------------------
+    # STEP 4: CORRECT SPREAD DEFINITION
+    # BACKWARDATION = POSITIVE
+    # -------------------------------
+    df["spread"] = df["CL1"] - df["CL2"]
+
+    # -------------------------------
+    # STEP 5: MOMENTUM
+    # -------------------------------
+    df["spread_change"] = df["spread"].diff()
+
+    # -------------------------------
+    # STEP 6: Z-SCORE (ROBUST)
+    # -------------------------------
+    window = min(20, len(df))
+
+    df["spread_mean"] = df["spread"].rolling(window, min_periods=10).mean()
+    df["spread_std"] = df["spread"].rolling(window, min_periods=10).std()
+
+    df["spread_zscore"] = (
+        (df["spread"] - df["spread_mean"]) / df["spread_std"]
+    ).fillna(0)
+
+    df["spread_magnitude"] = df["spread"].abs()
+
+    return df

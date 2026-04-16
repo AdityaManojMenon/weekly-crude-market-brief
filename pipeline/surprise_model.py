@@ -1,59 +1,161 @@
 import pandas as pd
 
-def compute_seasonal_baseline(df):
-    """
-    Computes 5-year seasonal average weekly change by week of year
-    """
-    df = df.copy()
 
-    # 5 years cutoff
-    cutoff = df["period"].max() - pd.DateOffset(years=5)
-    
-    last_5y = df[df["period"] >= cutoff].copy()
+def _compute_series_seasonal_baseline(
+    df: pd.DataFrame,
+    change_col: str,
+    output_col: str,
+) -> pd.DataFrame:
+    """
+    Compute 5-year seasonal average weekly change by ISO week for a given series.
+    """
+    work = df.copy()
+    cutoff = work["period"].max() - pd.DateOffset(years=5)
+    last_5y = work[work["period"] >= cutoff].copy()
 
-    # Create the seasonal bucket
     last_5y["week"] = last_5y["period"].dt.isocalendar().week
 
-    seasonal_avg = (
-        last_5y.groupby("week")["weekly_change"]
+    seasonal = (
+        last_5y.groupby("week")[change_col]
         .mean()
         .reset_index()
-        .rename(columns={"weekly_change": "seasonal_avg"})
+        .rename(columns={change_col: output_col})
+    )
+    return seasonal
+
+
+def _classify_inventory_signal(x: float) -> str:
+    if pd.isna(x):
+        return "neutral"
+    if x < -1:
+        return "bullish"   # bigger draw than expected
+    if x > 1:
+        return "bearish"   # bigger build than expected
+    return "neutral"
+
+
+def _classify_product_signal(x: float) -> str:
+    """
+    For gasoline/distillates:
+    More negative than expected = stronger draw = bullish demand signal
+    More positive than expected = weaker demand / build = bearish
+    """
+    if pd.isna(x):
+        return "neutral"
+    if x < -0.5:
+        return "bullish"
+    if x > 0.5:
+        return "bearish"
+    return "neutral"
+
+
+def compute_inventory_surprise(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Backward-compatible crude-only surprise model.
+
+    Expects:
+    - period
+    - value_million_bbl
+    - weekly_change
+    """
+    work = df.copy()
+
+    seasonal = _compute_series_seasonal_baseline(
+        work,
+        change_col="weekly_change",
+        output_col="seasonal_avg",
     )
 
-    return seasonal_avg
+    work["week"] = work["period"].dt.isocalendar().week
+    work = work.merge(seasonal, on="week", how="left")
 
-def compute_inventory_surprise(df):
+    work["inventory_surprise"] = work["weekly_change"] - work["seasonal_avg"]
+    work["signal"] = work["inventory_surprise"].apply(_classify_inventory_signal)
+
+    return work
+
+
+def compute_all_surprises(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Adds seasonal baseline + surprise + signal
+    Add seasonal averages, surprises, and signals for:
+    - crude
+    - gasoline
+    - distillates
+    - cushing
+
+    Expects columns from fetch_all_eia_series().
     """
+    work = df.copy()
+    work["week"] = work["period"].dt.isocalendar().week
 
-    df = df.copy()
-    
-    seasonal = compute_seasonal_baseline(df)
+    series_specs = [
+        {
+            "change_col": "crude_million_bbl_change",
+            "seasonal_col": "crude_seasonal_avg",
+            "surprise_col": "crude_surprise",
+            "signal_col": "crude_signal",
+            "signal_fn": _classify_inventory_signal,
+        },
+        {
+            "change_col": "gasoline_million_bbl_change",
+            "seasonal_col": "gasoline_seasonal_avg",
+            "surprise_col": "gasoline_surprise",
+            "signal_col": "gasoline_signal",
+            "signal_fn": _classify_product_signal,
+        },
+        {
+            "change_col": "distillates_million_bbl_change",
+            "seasonal_col": "distillates_seasonal_avg",
+            "surprise_col": "distillates_surprise",
+            "signal_col": "distillates_signal",
+            "signal_fn": _classify_product_signal,
+        },
+        {
+            "change_col": "cushing_million_bbl_change",
+            "seasonal_col": "cushing_seasonal_avg",
+            "surprise_col": "cushing_surprise",
+            "signal_col": "cushing_signal",
+            "signal_fn": _classify_inventory_signal,
+        },
+    ]
 
-    #merge seasonal average
-    df["week"] = df["period"].dt.isocalendar().week
-    df = df.merge(seasonal, on = "week", how = "left")
+    for spec in series_specs:
+        seasonal = _compute_series_seasonal_baseline(
+            work,
+            change_col=spec["change_col"],
+            output_col=spec["seasonal_col"],
+        )
+        work = work.merge(seasonal, on="week", how="left")
 
-    #compute surprise
-    df["inventory_surprise"] = df["weekly_change"] - df["seasonal_avg"]
+        work[spec["surprise_col"]] = (
+            work[spec["change_col"]] - work[spec["seasonal_col"]]
+        )
+        work[spec["signal_col"]] = work[spec["surprise_col"]].apply(spec["signal_fn"])
 
-    # classify signal
-    def classify_signal(x):
-        if pd.isna(x):
-            return "neutral"
-        elif x < -1:
-            return "bullish"   # bigger draw than expected
-        elif x > 1:
-            return "bearish"   # bigger build than expected
-        else:
-            return "neutral"
-        
-    df["signal"] = df["inventory_surprise"].apply(classify_signal)
-
-    return df
+    return work
 
 
+if __name__ == "__main__":
+    from pipeline.eia_ingestion import fetch_all_eia_series
 
-
+    df = fetch_all_eia_series()
+    out = compute_all_surprises(df)
+    print(
+        out[
+            [
+                "period",
+                "crude_million_bbl_change",
+                "crude_surprise",
+                "crude_signal",
+                "gasoline_million_bbl_change",
+                "gasoline_surprise",
+                "gasoline_signal",
+                "distillates_million_bbl_change",
+                "distillates_surprise",
+                "distillates_signal",
+                "cushing_million_bbl_change",
+                "cushing_surprise",
+                "cushing_signal",
+            ]
+        ].tail()
+    )
